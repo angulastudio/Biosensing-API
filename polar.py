@@ -17,12 +17,17 @@ class PolarH10:
     BATTERY_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb"
     BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 
+    # Heart rate service
+    HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
+    HEART_RATE_CHARACTERISTIC_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+
     def __init__(self, bleak_device):
         self.bleak_device = bleak_device
 
     async def connect_device(self):
         self.bleak_client = BleakClient(self.bleak_device)
         await self.bleak_client.connect()
+
 
     async def get_device_info_(self):
         self.model_number = await self.bleak_client.read_gatt_char(PolarH10.MODEL_NBR_UUID)
@@ -42,3 +47,9 @@ class PolarH10:
             f"Firmware Revision: {self.firmware_revision}\n"
             f"Hardware Revision: {self.hardware_revision}\n"
             f"Software Revision: {self.software_revision}")
+        
+    async def read_heart_rate(self):
+        heart_rate_data = await self.bleak_client.read_gatt_char(PolarH10.HEART_RATE_CHARACTERISTIC_UUID)
+        heart_rate = int(heart_rate_data[1])
+        print(heart_rate)
+        return heart_rate

@@ -30,3 +30,14 @@ paths:
           description: Polar device not found
         500:
           description: Error getting device information
+  /heart_rate:
+    get:
+      operationId: app.stream_heart_rate
+      summary: Get real-time heart rate
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
