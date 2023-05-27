@@ -1,57 +1,18 @@
-from flask import render_template, jsonify, Response, stream_with_context
+from flask import render_template, jsonify, Response, stream_with_context, make_response, Flask
 from bleak import BleakScanner, BleakClient
 import asyncio
-import base64
-from datetime import datetime
 import connexion
-import redis
-import time
 from polar import PolarH10
+from datetime import datetime
+import time
 
 
-heart_rate_data_key = 'heart_rate_data'
-r = redis.Redis()
 polar_device = None
-polar_device2 = None
-
-# def connect():
-#     global polar_device
-
-#     loop = asyncio.new_event_loop()
-#     asyncio.set_event_loop(loop)
-
-#     devices = loop.run_until_complete(BleakScanner.discover())
-#     polar_device_found = False
-
-#     for device in devices:
-#         if device.name is not None and "Polar" in device.name:
-#             polar_device_found = True
-#             polar_device = PolarH10(device)
-#             try:
-#                 loop.run_until_complete(polar_device.connect_device())
-#                 loop.run_until_complete(polar_device.get_device_info_())
-#                 loop.run_until_complete(polar_device.print_device_info())
-#                 return 'Conectado al Polar H10'
-#             except Exception as e:
-#                 return f'Error al conectar con el Polar H10: {str(e)}', 500
-
-#     if not polar_device_found:
-#         return 'No se encontró un dispositivo Polar', 404
-
-async def heart_rate_handler(sender, data):
-    # El valor de los latidos del corazón se encuentra en el byte 1 del arreglo de datos.
-    heart_rate = data[1]
-    timestamp = datetime.now().strftime('%H:%M:%S.%f')
-    print("Latidos del corazón:", heart_rate, timestamp)
-    return("Latidos del corazón:", heart_rate, timestamp)
-
     
 async def connect():
     global polar_device
     global polar_device2
 
-    # loop = asyncio.new_event_loop()
-    # asyncio.set_event_loop(loop)
 
     devices = await BleakScanner.discover()
     polar_device_found = False
@@ -61,21 +22,9 @@ async def connect():
             polar_device_found = True
             polar_device = PolarH10(device)
             polar_device2 = device
+
             try:
                 await polar_device.connect_device()
-
-                # async with BleakClient(device) as client:
-                #     # UUID de la característica de frecuencia cardíaca
-                #     heart_rate_characteristic_uuid = "00002a37-0000-1000-8000-00805f9b34fb"
-
-                #     # Suscribirse a las notificaciones de cambios en la característica de frecuencia cardíaca
-                #     await client.start_notify(heart_rate_characteristic_uuid, heart_rate_handler)
-
-                
-
-                #     # Esperar a que se reciban los datos del sensor de frecuencia cardíaca
-                #     while True:
-                #         await asyncio.sleep(0.1)  # Esperar un corto período de tiempo para recibir notificaciones
 
                 return 'Conectado al Polar H10'
             except Exception as e:
@@ -117,6 +66,28 @@ def get_device_info():
     
 
 
+# async def stream_heart_rate():
+#     global polar_device
+
+#     if not polar_device:
+#         return 'No se ha conectado ningún dispositivo Polar', 404
+
+#     async def heart_rate_stream():
+#         while True:
+#             heart_rate = await polar_device.stream_heart_rate2()
+#             yield str(heart_rate) + '\n'
+
+#     async def stream():
+#         async for data in heart_rate_stream():
+#             yield data
+
+#     async def main():
+#         event_loop = asyncio.get_event_loop()
+#         return await event_loop.run_until_complete(stream())
+
+#     asyncio.get_event_loop().run_until_complete(main())
+
+
 def stream_heart_rate():
     def generate_heart_rate():
         while True:
@@ -140,6 +111,7 @@ def stream_heart_rate():
 
 
 
+
 if __name__ == '__main__':
     app = connexion.FlaskApp(__name__, specification_dir="./")
     app.add_api("swagger.yml")
@@ -148,4 +120,4 @@ if __name__ == '__main__':
     app.add_url_rule("/device_info", "get_device_info", get_device_info, methods=["GET"])
     app.add_url_rule("/heart_rate", "stream_heart_rate", stream_heart_rate, methods=["GET"])
 
-    asyncio.run(app.run(debug=True, port=8000))
+    app.run(debug=True, port=8000, threaded=True)

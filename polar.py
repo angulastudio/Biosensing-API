@@ -50,6 +50,13 @@ class PolarH10:
         
     async def read_heart_rate(self):
         heart_rate_data = await self.bleak_client.read_gatt_char(PolarH10.HEART_RATE_CHARACTERISTIC_UUID)
-        heart_rate = int(heart_rate_data[1])
+        heart_rate = heart_rate_data[1]
         print(heart_rate)
         return heart_rate
+    
+    async def stream_heart_rate2(self):
+        while True:
+            heart_rate_data = await self.bleak_client.read_gatt_char(PolarH10.HEART_RATE_CHARACTERISTIC_UUID)
+            heart_rate = heart_rate_data[1]
+            yield str(heart_rate)
+            await asyncio.sleep(1)
