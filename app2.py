@@ -1,10 +1,10 @@
 import asyncio
 from datetime import datetime
-from flask import Flask, jsonify
+from quart import Quart, jsonify, request, current_app
 from bleak import BleakScanner, BleakClient
 import threading
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 class PolarH10:
     # Resto del código de la clase PolarH10 sin cambios
@@ -26,14 +26,11 @@ class PolarH10:
     HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
     HEART_RATE_CHARACTERISTIC_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 
-
-
     def __init__(self, bleak_device):
         self.bleak_device = bleak_device
-
+        self.bleak_client = BleakClient(self.bleak_device)
 
     async def connect(self):
-        self.bleak_client = BleakClient(self.bleak_device)
         await self.bleak_client.connect()
 
     async def get_device_info(self):
@@ -49,65 +46,68 @@ class PolarH10:
         BLUE = "\033[94m"
         RESET = "\033[0m"
         print(f"Model Number: {BLUE}{''.join(map(chr, self.model_number))}{RESET}\n"
-            f"Manufacturer Name: {BLUE}{''.join(map(chr, self.manufacturer_name))}{RESET}\n"
-            f"Serial Number: {BLUE}{''.join(map(chr, self.serial_number))}{RESET}\n"
-            f"Address: {BLUE}{self.bleak_device.address}{RESET}\n"
-            f"Battery Level: {BLUE}{int(self.battery_level[0])}%{RESET}\n"
-            f"Firmware Revision: {BLUE}{''.join(map(chr, self.firmware_revision))}{RESET}\n"
-            f"Hardware Revision: {BLUE}{''.join(map(chr, self.hardware_revision))}{RESET}\n"
-            f"Software Revision: {BLUE}{''.join(map(chr, self.software_revision))}{RESET}")
-        
+              f"Manufacturer Name: {BLUE}{''.join(map(chr, self.manufacturer_name))}{RESET}\n"
+              f"Serial Number: {BLUE}{''.join(map(chr, self.serial_number))}{RESET}\n"
+              f"Address: {BLUE}{self.bleak_device.address}{RESET}\n"
+              f"Battery Level: {BLUE}{int(self.battery_level[0])}%{RESET}\n"
+              f"Firmware Revision: {BLUE}{''.join(map(chr, self.firmware_revision))}{RESET}\n"
+              f"Hardware Revision: {BLUE}{''.join(map(chr, self.hardware_revision))}{RESET}\n"
+              f"Software Revision: {BLUE}{''.join(map(chr, self.software_revision))}{RESET}")
 
-heart_rate_data = []
-heart_rate_event = threading.Event()
+connected = False
+heart_rate_queue = asyncio.Queue()
+
+async def connect_to_polar():
+    devices = await BleakScanner.discover()
+    polar_device_found = False
+
+    global polar_device
+
+    for device in devices:
+        if device.name is not None and "Polar" in device.name:
+            polar_device_found = True
+            polar_device = PolarH10(device)
+            await polar_device.connect()
+            await polar_device.get_device_info()
+            await polar_device.print_device_info()
+
+            async with BleakClient(device) as client:
+                heart_rate_characteristic_uuid = "00002a37-0000-1000-8000-00805f9b34fb"
+                await client.start_notify(heart_rate_characteristic_uuid, heart_rate_handler)
+
+    if not polar_device_found:
+        print("No Polar device found")
 
 async def heart_rate_handler(sender, data):
-    # Resto del código del manejador de latidos del corazón sin cambios
-    # Asegúrate de agregar los valores a heart_rate_data y activar heart_rate_event
-    # El valor de los latidos del corazón se encuentra en el byte 1 del arreglo de datos.
     heart_rate = data[1]
-    heart_rate_data.append(heart_rate)
-    timestamp = datetime.now().strftime('%H:%M:%S.%f')
-    print("Latidos del corazón:", heart_rate, timestamp)
+    await heart_rate_queue.put(heart_rate)
+
+def run_bleak_in_thread():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(connect_to_polar())
+
+def run_app():
+    threading.Thread(target=run_bleak_in_thread, daemon=True).start()
+    app.run()
 
 @app.route('/connect', methods=['GET'])
-def connect():
-    async def connect_to_polar():
-        devices = await BleakScanner.discover()
-        polar_device_found = False
+async def connect():
+    global connected
+    if connected:
+        return jsonify({'message': 'Already connected to PolarH10'})
 
-        global polar_device
-
-        for device in devices:
-            if device.name is not None and "Polar" in device.name:
-                polar_device_found = True
-                polar_device = PolarH10(device)
-                await polar_device.connect()
-                await polar_device.get_device_info()
-                await polar_device.print_device_info()
-
-                async with BleakClient(device) as client:
-                    heart_rate_characteristic_uuid = "00002a37-0000-1000-8000-00805f9b34fb"
-                    await client.start_notify(heart_rate_characteristic_uuid, heart_rate_handler)
-
-                    while True:
-                        await asyncio.sleep(0.1)
-                        if heart_rate_event.is_set():
-                            heart_rate_event.clear()
-                            break
-
-        if not polar_device_found:
-            print("No Polar device found")
-
-    threading.Thread(target=lambda: asyncio.run(connect_to_polar())).start()
+    connected = True
     return jsonify({'message': 'Connecting to PolarH10'})
 
-@app.route('/heart-rate', methods=['GET'])
-def get_heart_rate():
-    if not heart_rate_data:
-        return jsonify({'message': 'No heart rate data available'})
-    
-    return jsonify({'heart_rate': heart_rate_data.pop(0)})
+@app.route('/heart-rate')
+async def get_heart_rate():
+    async def stream():
+        while True:
+            heart_rate = await heart_rate_queue.get()
+            yield f"data: {heart_rate}\n\n"
+
+    return app.response_class(stream(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
-    app.run()
+    run_app()
