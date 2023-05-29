@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 from bleak import BleakScanner, BleakClient
-from datetime import datetime
 import asyncio
+import uvicorn
+import struct
 
 app = FastAPI()
 
@@ -13,8 +15,8 @@ class PolarH10:
     def __init__(self):
         self.bleak_device = None
         self.bleak_client = None
-        self.rr_peaks_lock = asyncio.Lock()
-        self.rr_peaks_data = []
+        self.subscribers = []
+        self.notifications_started = False
 
     async def connect(self, device):
         self.bleak_device = device
@@ -25,47 +27,37 @@ class PolarH10:
         if self.bleak_client:
             await self.bleak_client.disconnect()
 
-    async def start_heart_rate_notifications(self, callback):
+    async def start_notifications(self):
         await self.bleak_client.start_notify(
             PolarH10.HEART_RATE_CHARACTERISTIC_UUID,
-            callback
+            self.notification_callback
         )
+        self.notifications_started = True
 
-    async def stop_heart_rate_notifications(self):
+    async def stop_notifications(self):
         await self.bleak_client.stop_notify(
             PolarH10.HEART_RATE_CHARACTERISTIC_UUID
         )
+        self.notifications_started = False
 
-    async def get_heart_rate(self):
-        value = await self.bleak_client.read_gatt_char(
-            PolarH10.HEART_RATE_CHARACTERISTIC_UUID
-        )
-        heart_rate = value[1]
-        return heart_rate
+    async def notify_subscribers(self, data):
+        for subscriber in self.subscribers:
+            await subscriber(data)
 
-    async def add_rr_peak(self, rr_peak):
-        async with self.rr_peaks_lock:
-            self.rr_peaks_data.append(rr_peak)
-
-    async def get_rr_peaks(self):
-        async with self.rr_peaks_lock:
-            peaks = self.rr_peaks_data.copy()
-            self.rr_peaks_data.clear()
-            return peaks
+    async def notification_callback(self, sender, data):
+        await self.notify_subscribers(data)
 
 heart_rate_data = []
 rr_peaks_data = []
 polar_device = PolarH10()
 
-async def heart_rate_handler(sender, data):
-    heart_rate = data[1]
-    rr_peaks = (data[1] << 8) | data[0]
+async def heart_rate_handler(data):
+    heart_rate = struct.unpack('<B', data[1:2])[0]
     heart_rate_data.append(heart_rate)
+
+async def rr_peaks_handler(data):
+    rr_peaks = struct.unpack('<H', data[0:2])[0]
     rr_peaks_data.append(rr_peaks)
-    timestamp = datetime.now().strftime('%H:%M:%S.%f')
-    print("Heart Rate:", heart_rate, " | ", timestamp)
-    print("RR Peaks:", rr_peaks, " | ", timestamp)
-    await polar_device.add_rr_peak(rr_peaks)
 
 async def scan_polar_devices():
     devices = await BleakScanner.discover()
@@ -75,69 +67,84 @@ async def scan_polar_devices():
             polar_devices.append(device)
     return polar_devices
 
-@app.get("/connect")
-async def connect_to_polar():
+@app.on_event("startup")
+async def startup_event():
     try:
         polar_devices = await scan_polar_devices()
         if not polar_devices:
-            return {"message": "No Polar devices found"}
+            print("No Polar devices found")
+            return
 
         await polar_device.connect(polar_devices[0])
-        return {"message": "Connected to Polar device"}
+        print("Connected to Polar device")
 
     except Exception as e:
-        return {"message": str(e)}
-
-@app.get("/heart_rate")
-async def stream_heart_rate():
-    async def generate_heart_rate():
-        try:
-            await polar_device.start_heart_rate_notifications(heart_rate_handler)
-
-            while True:
-                await asyncio.sleep(1)
-                if heart_rate_data:
-                    heart_rate = heart_rate_data.pop()
-                    yield f"data: {heart_rate}\n\n"
-
-        except Exception as e:
-            yield f"event: error\ndata: {str(e)}\n\n"
-
-        finally:
-            await polar_device.stop_heart_rate_notifications()
-
-    return StreamingResponse(generate_heart_rate(), media_type="text/event-stream")
-
-
-@app.get("/rr_peaks")
-async def stream_rr_peaks():
-    async def generate_rr_peaks():
-        try:
-            await polar_device.start_heart_rate_notifications(heart_rate_handler)
-
-            while True:
-                await asyncio.sleep(1)
-                if rr_peaks_data:
-                    rr_peak = rr_peaks_data.pop()
-                    yield f"data: {rr_peak}\n\n"
-
-        except Exception as e:
-            yield f"event: error\ndata: {str(e)}\n\n"
-
-        finally:
-            await polar_device.stop_heart_rate_notifications()
-
-    return StreamingResponse(generate_rr_peaks(), media_type="text/event-stream")
-
-# @app.get("/rr_peaks")
-# async def get_rr_peaks():
-#     peaks = await polar_device.get_rr_peaks()
-#     return {"rr_peaks": peaks}
+        print(str(e))
 
 @app.on_event("shutdown")
 async def shutdown_event():
     await polar_device.disconnect()
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail}
+    )
+
+@app.get("/connect")
+async def connect_to_polar():
+    try:
+        polar_devices = await scan_polar_devices()
+        if not polar_devices:
+            raise HTTPException(status_code=404, detail="No Polar devices found")
+
+        await polar_device.connect(polar_devices[0])
+        return {"message": "Connected to Polar device"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/start_notifications")
+async def start_notifications():
+    if not polar_device.notifications_started:
+        polar_device.subscribers.append(heart_rate_handler)
+        polar_device.subscribers.append(rr_peaks_handler)
+        await polar_device.start_notifications()
+        return {"message": "Notifications started"}
+    else:
+        return {"message": "Notifications already started"}
+
+@app.get("/stop_notifications")
+async def stop_notifications():
+    if polar_device.notifications_started:
+        polar_device.subscribers.remove(heart_rate_handler)
+        polar_device.subscribers.remove(rr_peaks_handler)
+        await polar_device.stop_notifications()
+        return {"message": "Notifications stopped"}
+    else:
+        return {"message": "Notifications not started"}
+
+@app.get("/heart_rate")
+async def stream_heart_rate():
+    if polar_device.notifications_started:
+        return StreamingResponse(generate_data(heart_rate_data), media_type="text/event-stream")
+    else:
+        raise HTTPException(status_code=404, detail="Heart rate notifications not started")
+
+@app.get("/rr_peaks")
+async def stream_rr_peaks():
+    if polar_device.notifications_started:
+        return StreamingResponse(generate_data(rr_peaks_data), media_type="text/event-stream")
+    else:
+        raise HTTPException(status_code=404, detail="RR peaks notifications not started")
+
+async def generate_data(data):
+    while True:
+        await asyncio.sleep(1)
+        if data:
+            value = data.pop()
+            yield f"data: {value}\n\n"
+
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
