@@ -5,6 +5,7 @@ from bleak import BleakScanner, BleakClient
 import asyncio
 import uvicorn
 import struct
+from pyhrv import time_domain
 
 app = FastAPI()
 
@@ -49,6 +50,7 @@ class PolarH10:
 
 heart_rate_data = []
 rr_peaks_data = []
+hrv_data = []
 polar_device = PolarH10()
 
 async def heart_rate_handler(data):
@@ -58,6 +60,16 @@ async def heart_rate_handler(data):
 async def rr_peaks_handler(data):
     rr_peaks = struct.unpack('<H', data[0:2])[0]
     rr_peaks_data.append(rr_peaks)
+    if len(rr_peaks_data) >= 2:
+        await calculate_hrv()
+
+async def calculate_hrv():
+    if len(rr_peaks_data) < 2:
+        return
+
+    rr_intervals = [rr / 1000.0 for rr in rr_peaks_data]
+    hrv_results = time_domain.nni_parameters(rr_intervals)
+    hrv_data.append(hrv_results)
 
 async def scan_polar_devices():
     devices = await BleakScanner.discover()
@@ -138,6 +150,13 @@ async def stream_rr_peaks():
         return StreamingResponse(generate_data(rr_peaks_data), media_type="text/event-stream")
     else:
         raise HTTPException(status_code=404, detail="RR peaks notifications not started")
+
+@app.get("/hrv")
+async def stream_hrv():
+    if polar_device.notifications_started:
+        return StreamingResponse(generate_data(hrv_data), media_type="text/event-stream")
+    else:
+        raise HTTPException(status_code=404, detail="HRV notifications not started")
 
 async def generate_data(data):
     while True:
