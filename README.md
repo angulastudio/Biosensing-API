@@ -2,6 +2,7 @@
 
 [![forthebadge](https://forthebadge.com/images/badges/made-with-python.svg)](https://forthebadge.com)
 [![forthebadge](https://forthebadge.com/images/badges/powered-by-coffee.svg)](https://forthebadge.com)
+[![forthebadge](https://forthebadge.com/images/badges/makes-people-smile.svg)](https://forthebadge.com)
 
 ## Description
 The Biosensing API is an API that streams real-time data from Polar heart rate sensors. It transmits real-time data such as heartbeats, RR peaks, and HRV.
@@ -10,7 +11,7 @@ The Biosensing API is an API that streams real-time data from Polar heart rate s
 
 1. Clone the repository
 ```bash
-   git clone https://github.com/tu-usuario/tu-aplicacion.git
+   git clone git@github.com:ServirGt/Biosensing-API.git
 ```
 2. Create an enviroment (optional but recommended)
 ```bash
