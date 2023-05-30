@@ -33,6 +33,37 @@ The Biosensing API is an API that streams real-time data from Polar heart rate s
    uvicorn app:app --reload
 ```
 
+## Utilization of endpoints
+### Connect to a Polar device:
+```bash
+   curl http://127.0.0.1:8000/connect
+```
+
+### Start notifications
+```bash
+   curl http://127.0.0.1:8000/start_notifications
+```
+
+### Stream Heart Rate
+```bash
+   curl http://127.0.0.1:8000/heart_rate
+```
+
+### Stream RR Peaks
+```bash
+   curl http://127.0.0.1:8000/rr_peaks
+```
+
+### Stream HRV
+```bash
+   curl http://127.0.0.1:8000/hrv
+```
+
+### Stop notifications
+```bash
+   curl http://127.0.0.1:8000/stop_notifications
+```
+
 
 ## License
 
