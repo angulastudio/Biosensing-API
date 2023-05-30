@@ -6,6 +6,8 @@ import asyncio
 import uvicorn
 import struct
 from pyhrv import time_domain
+import math
+from scipy.signal import find_peaks
 
 app = FastAPI()
 
@@ -56,20 +58,57 @@ polar_device = PolarH10()
 async def heart_rate_handler(data):
     heart_rate = struct.unpack('<B', data[1:2])[0]
     heart_rate_data.append(heart_rate)
+    
 
 async def rr_peaks_handler(data):
+    # rr_peaks = (data[0] << 8) + data[1]
     rr_peaks = struct.unpack('<H', data[0:2])[0]
     rr_peaks_data.append(rr_peaks)
     if len(rr_peaks_data) >= 2:
-        await calculate_hrv()
+        await calculate_hrv(rr_peaks_data)
 
-async def calculate_hrv():
-    if len(rr_peaks_data) < 2:
+hrv_range_min = 0
+hrv_range_max = 100
+
+min_sdnn = float('inf')
+max_sdnn = -float('inf')
+min_rmssd = float('inf')
+max_rmssd = -float('inf')
+
+async def calculate_hrv(rr_intervals):
+    global min_sdnn, max_sdnn, min_rmssd, max_rmssd
+
+    if len(rr_intervals) < 2:
         return
 
-    rr_intervals = [rr / 1000.0 for rr in rr_peaks_data]
-    hrv_results = time_domain.nni_parameters(rr_intervals)
-    hrv_data.append(hrv_results)
+    # Calculate HRV measures
+    sdnn = time_domain.sdnn(rr_intervals)[0]
+    rmssd = time_domain.rmssd(rr_intervals)[0]
+
+    # Handle NaN values
+    if math.isnan(sdnn) or math.isnan(rmssd):
+        return
+
+    # Update min/max values
+    min_sdnn = min(min_sdnn, sdnn)
+    max_sdnn = max(max_sdnn, sdnn)
+    min_rmssd = min(min_rmssd, rmssd)
+    max_rmssd = max(max_rmssd, rmssd)
+
+    # Normalize HRV measures
+    normalized_sdnn = scale_to_range(sdnn, min_sdnn, max_sdnn, hrv_range_min, hrv_range_max)
+    normalized_rmssd = scale_to_range(rmssd, min_rmssd, max_rmssd, hrv_range_min, hrv_range_max)
+
+    # Append HRV data
+    hrv_data.append({
+        "sdnn": normalized_sdnn,
+        "rmssd": normalized_rmssd
+    })
+
+
+def scale_to_range(value, value_min, value_max, range_min, range_max):
+    scaled_value = ((value - value_min) / (value_max - value_min)) * (range_max - range_min) + range_min
+    return scaled_value
 
 async def scan_polar_devices():
     devices = await BleakScanner.discover()
