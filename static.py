@@ -71,6 +71,8 @@ min_rmssd = float('inf')
 max_rmssd = -float('inf')
 
 def normalize_hrv(value, value_min, value_max, range_min, range_max):
+    if value_min == value_max:
+        return range_min  # Evitar división por cero
     normalized_value = (math.log(value) - math.log(value_min)) / (math.log(value_max) - math.log(value_min)) * (range_max - range_min) + range_min
     normalized_value = min(max(normalized_value, range_min), range_max)
     return normalized_value
