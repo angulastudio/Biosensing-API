@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from starlette.responses import StreamingResponse
+from starlette.responses import PlainTextResponse
 from bleak import BleakScanner, BleakClient
-# from polar import PolarH10
 import asyncio
 import uvicorn
 import struct
@@ -11,8 +10,6 @@ import math
 
 
 app = FastAPI()
-
-
 
 class PolarH10:
     HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb"
@@ -53,15 +50,62 @@ class PolarH10:
     async def notification_callback(self, sender, data):
         await self.notify_subscribers(data)
 
-
-
+heart_rate_data = []
+rr_peaks_data = []
+hrv_data = []
 polar_device = PolarH10()
-latest_heart_rate = 0
 
 async def heart_rate_handler(data):
-    global latest_heart_rate
     heart_rate = struct.unpack('<B', data[1:2])[0]
-    latest_heart_rate = heart_rate
+    heart_rate_data.append(heart_rate)
+
+async def rr_peaks_handler(data):
+    rr_peaks = struct.unpack('<H', data[0:2])[0]
+    rr_peaks_data.append(rr_peaks)
+    if len(rr_peaks_data) >= 2:
+        await calculate_hrv(rr_peaks_data)
+
+hrv_range_min = 0
+hrv_range_max = 100
+
+min_sdnn = float('inf')
+max_sdnn = -float('inf')
+min_rmssd = float('inf')
+max_rmssd = -float('inf')
+
+async def calculate_hrv(rr_intervals):
+    global min_sdnn, max_sdnn, min_rmssd, max_rmssd
+
+    if len(rr_intervals) < 2:
+        return
+
+    # Calculate HRV measures
+    sdnn = time_domain.sdnn(rr_intervals)[0]
+    rmssd = time_domain.rmssd(rr_intervals)[0]
+
+    # Handle NaN values
+    if math.isnan(sdnn) or math.isnan(rmssd):
+        return
+
+    # Update min/max values
+    min_sdnn = min(min_sdnn, sdnn)
+    max_sdnn = max(max_sdnn, sdnn)
+    min_rmssd = min(min_rmssd, rmssd)
+    max_rmssd = max(max_rmssd, rmssd)
+
+    # Normalize HRV measures
+    normalized_sdnn = scale_to_range(sdnn, min_sdnn, max_sdnn, hrv_range_min, hrv_range_max)
+    normalized_rmssd = scale_to_range(rmssd, min_rmssd, max_rmssd, hrv_range_min, hrv_range_max)
+
+    # Append HRV data
+    hrv_data.append({
+        "sdnn": normalized_sdnn,
+        "rmssd": normalized_rmssd
+    })
+
+def scale_to_range(value, value_min, value_max, range_min, range_max):
+    scaled_value = ((value - value_min) / (value_max - value_min)) * (range_max - range_min) + range_min
+    return scaled_value
 
 async def scan_polar_devices():
     devices = await BleakScanner.discover()
@@ -82,11 +126,7 @@ async def http_exception_handler(request, exc):
         content={"message": exc.detail}
     )
 
-@app.get("/connect", responses={
-    200: {"description": "Item retrieved successfully"},
-    404: {"description": "Item not found"},
-    500: {"description": "Item not found"}
-})
+@app.get("/connect")
 async def connect_to_polar():
     try:
         polar_devices = await scan_polar_devices()
@@ -101,33 +141,64 @@ async def connect_to_polar():
 
 @app.get("/start_notifications")
 async def start_notifications():
-    if not polar_device.notifications_started:
-        polar_device.subscribers.append(heart_rate_handler)
-        # polar_device.subscribers.append(rr_peaks_handler)
-        await polar_device.start_notifications()
-        return {"message": "Notifications started"}
-    else:
-        return {"message": "Notifications already started"}
+    try:
+        if not polar_device.notifications_started:
+            polar_device.subscribers.append(heart_rate_handler)
+            polar_device.subscribers.append(rr_peaks_handler)
+            await polar_device.start_notifications()
+            return {"message": "Notifications started"}
+
+        raise HTTPException(status_code=500, detail="Notifications already started")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stop_notifications")
 async def stop_notifications():
-    if polar_device.notifications_started:
-        polar_device.subscribers.remove(heart_rate_handler)
-        # polar_device.subscribers.remove(rr_peaks_handler)
-        await polar_device.stop_notifications()
-        return {"message": "Notifications stopped"}
-    else:
-        return {"message": "Notifications not started"}
+    try:
+        if polar_device.notifications_started:
+            polar_device.subscribers.remove(heart_rate_handler)
+            polar_device.subscribers.remove(rr_peaks_handler)
+            await polar_device.stop_notifications()
+            return {"message": "Notifications stopped"}
+
+        raise HTTPException(status_code=500, detail="Notifications already stopped")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/heart_rate")
 async def get_heart_rate():
-    global latest_heart_rate
-    if polar_device.notifications_started:
-        return {"heart_rate": latest_heart_rate}
-    else:
-        raise HTTPException(status_code=404, detail="Heart rate notifications not started")
+    try:
+        if heart_rate_data:
+            return {"heart_rate": heart_rate_data[-1]}
 
-# Resto del código sin cambios
+        raise HTTPException(status_code=404, detail="No heart rate data available")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/rr_peaks")
+async def get_rr_peaks():
+    try:
+        if rr_peaks_data:
+            return {"rr_peaks": rr_peaks_data[-1]}
+
+        raise HTTPException(status_code=404, detail="No RR peaks data available")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/hrv")
+async def get_hrv():
+    try:
+        if hrv_data:
+            return {"hrv": hrv_data[-1]}
+
+        raise HTTPException(status_code=404, detail="No HRV data available")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
