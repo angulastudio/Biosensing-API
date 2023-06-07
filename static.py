@@ -67,39 +67,45 @@ async def rr_peaks_handler(data):
 
 hrv_range_min = 0
 hrv_range_max = 100
-
-min_sdnn = float('inf')
-max_sdnn = -float('inf')
 min_rmssd = float('inf')
 max_rmssd = -float('inf')
 
+def normalize_hrv(value, value_min, value_max, range_min, range_max):
+    normalized_value = (math.log(value) - math.log(value_min)) / (math.log(value_max) - math.log(value_min)) * (range_max - range_min) + range_min
+    normalized_value = min(max(normalized_value, range_min), range_max)
+    return normalized_value
+
+
 async def calculate_hrv(rr_intervals):
-    global min_sdnn, max_sdnn, min_rmssd, max_rmssd
+    # global min_sdnn, max_sdnn, min_rmssd, max_rmssd
+    global min_rmssd, max_rmssd
+
 
     if len(rr_intervals) < 2:
         return
 
     # Calculate HRV measures
-    sdnn = time_domain.sdnn(rr_intervals)[0]
+    # sdnn = time_domain.sdnn(rr_intervals)[0]
     rmssd = time_domain.rmssd(rr_intervals)[0]
 
     # Handle NaN values
-    if math.isnan(sdnn) or math.isnan(rmssd):
+    # if math.isnan(sdnn) or math.isnan(rmssd):
+    if math.isnan(rmssd):
         return
 
     # Update min/max values
-    min_sdnn = min(min_sdnn, sdnn)
-    max_sdnn = max(max_sdnn, sdnn)
+    # min_sdnn = min(min_sdnn, sdnn)
+    # max_sdnn = max(max_sdnn, sdnn)
     min_rmssd = min(min_rmssd, rmssd)
     max_rmssd = max(max_rmssd, rmssd)
 
     # Normalize HRV measures
-    normalized_sdnn = scale_to_range(sdnn, min_sdnn, max_sdnn, hrv_range_min, hrv_range_max)
-    normalized_rmssd = scale_to_range(rmssd, min_rmssd, max_rmssd, hrv_range_min, hrv_range_max)
+    # normalized_sdnn = normalize_hrv(sdnn, min_sdnn, max_sdnn, hrv_range_min, hrv_range_max)
+    normalized_rmssd = normalize_hrv(rmssd, min_rmssd, max_rmssd, hrv_range_min, hrv_range_max)
 
     # Append HRV data
     hrv_data.append({
-        "sdnn": normalized_sdnn,
+        # "sdnn": normalized_sdnn,
         "rmssd": normalized_rmssd
     })
 
