@@ -60,10 +60,13 @@ async def heart_rate_handler(data):
     heart_rate_data.append(heart_rate)
 
 async def rr_peaks_handler(data):
-    rr_peaks = struct.unpack('<H', data[0:2])[0]
-    rr_peaks_data.append(rr_peaks)
-    if len(rr_peaks_data) >= 2:
-        await calculate_hrv(rr_peaks_data)
+    flags = struct.unpack('<B', data[0:1])[0]
+    rr_interval_present = (flags >> 4) & 0x01
+    if rr_interval_present:
+        rr_interval1 = struct.unpack('<H', data[2:4])[0]  # First RR interval
+        rr_peaks_data.append(rr_interval1)
+        if len(rr_peaks_data) >= 2:
+            await calculate_hrv(rr_peaks_data)
 
 hrv_range_min = 0
 hrv_range_max = 100

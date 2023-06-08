@@ -67,7 +67,7 @@ def print_latest_data():
         print("RR Peaks data not available")
 
     # Esperar 10 segundos antes de obtener el valor de HRV
-    time.sleep(10)
+    time.sleep(5)
 
     hrv = get_latest_hrv()
 
