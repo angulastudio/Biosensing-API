@@ -63,7 +63,7 @@ async def rr_peaks_handler(data):
     flags = struct.unpack('<B', data[0:1])[0]
     rr_interval_present = (flags >> 4) & 0x01
     if rr_interval_present:
-        rr_interval1 = struct.unpack('<H', data[2:4])[0]  # First RR interval
+        rr_interval1 = struct.unpack('<H', data[2:4])[0]
         rr_peaks_data.append(rr_interval1)
         if len(rr_peaks_data) >= 2:
             await calculate_hrv(rr_peaks_data)
@@ -111,7 +111,7 @@ async def calculate_hrv(rr_intervals):
     # Append HRV data
     hrv_data.append({
         # "sdnn": normalized_sdnn,
-        "rmssd": normalized_rmssd
+        "rmssd": rmssd
     })
 
 def scale_to_range(value, value_min, value_max, range_min, range_max):
