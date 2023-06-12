@@ -5,6 +5,7 @@ from bleak import BleakScanner, BleakClient
 import asyncio
 import struct
 import math
+from scipy import signal
 
 app = FastAPI()
 
@@ -53,9 +54,24 @@ rr_peaks_data = []
 hrv_data = []
 polar_device = PolarH10()
 
+# Configuración del filtro
+fs = 100  # Frecuencia de muestreo (Hz)
+fc = 10  # Frecuencia de corte del filtro (Hz)
+order = 4  # Orden del filtro
+
+# Diseñar el filtro Butterworth de paso bajo
+nyquist_freq = 0.5 * fs
+cutoff_freq = fc / nyquist_freq
+b, a = signal.butter(order, cutoff_freq, btype='low', analog=False, output='ba')
+
+
 async def heart_rate_handler(data):
     heart_rate = struct.unpack('<B', data[1:2])[0]
     heart_rate_data.append(heart_rate)
+
+def apply_filter(data):
+    filtered_data = signal.lfilter(b, a, data)
+    return filtered_data.tolist()
 
 def calculate_hrv(rr_intervals):
     if len(rr_intervals) < 2:
@@ -64,7 +80,7 @@ def calculate_hrv(rr_intervals):
     # 1. Calcular RMSSD
     differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(1, len(rr_intervals))]
     squared_differences = [diff ** 2 for diff in differences]
-    mean_squared_diff = sum(squared_differences) / len(squared_differences)
+    mean_squared_diff = sum(squared_differences) / (len(squared_differences)-1)
     rmssd = math.sqrt(mean_squared_diff)
 
     # 2. Aplicar ln(RMSSD)
@@ -73,7 +89,20 @@ def calculate_hrv(rr_intervals):
     # 3. Expandir ln(RMSSD) a un rango de 0 a 100
     hrv_score = (ln_rmssd / 6.5) * 100
 
+    # 4. Limitar el rango a 0-100
+    hrv_score = max(0, min(hrv_score, 100))
+
     return hrv_score
+
+def apply_rr_peak_filter(rr_peaks, window_size=5):
+    filtered_rr_peaks = []
+    for i in range(len(rr_peaks)):
+        start_index = max(0, i - window_size // 2)
+        end_index = min(len(rr_peaks), i + window_size // 2 + 1)
+        rr_values = rr_peaks[start_index:end_index]
+        filtered_rr_value = sum(rr_values) / len(rr_values)
+        filtered_rr_peaks.append(filtered_rr_value)
+    return filtered_rr_peaks
 
 async def rr_peaks_handler(data):
     flags = struct.unpack('<B', data[0:1])[0]
@@ -81,15 +110,12 @@ async def rr_peaks_handler(data):
     if rr_interval_present:
         rr_interval1 = struct.unpack('<H', data[2:4])[0]
         rr_peaks_data.append(rr_interval1)
-        if len(rr_peaks_data) >= 2:
-            hrv_value = calculate_hrv(rr_peaks_data)
+        filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
+        if len(filtered_rr_peaks) >= 2:
+            hrv_value = calculate_hrv(filtered_rr_peaks)
             if hrv_value is not None:
-                hrv_data.append({
-                    "hrv": int(hrv_value)
-                })
-
-hrv_range_min = 0
-hrv_range_max = 100
+                hrv_data.append({"hrv": hrv_value})
+                
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -170,16 +196,15 @@ async def get_rr_peaks():
 async def get_hrv():
     try:
         if hrv_data:
-            hrv_value = round(hrv_data[-1]["hrv"], 2)
-            return {"hrv": hrv_value}
+            hrv_values = [data["hrv"] for data in hrv_data]
+            filtered_hrv_data = apply_filter(hrv_values)
+            filtered_hrv = round(filtered_hrv_data[-1], 2)
+            return {"hrv": filtered_hrv}
 
         raise HTTPException(status_code=404, detail="No HRV data available")
 
     except Exception as e:
         return {"error": str(e)}
-
-
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
