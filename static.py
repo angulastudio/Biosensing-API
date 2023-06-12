@@ -61,12 +61,19 @@ def calculate_hrv(rr_intervals):
     if len(rr_intervals) < 2:
         return None
 
+    # 1. Calcular RMSSD
     differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(1, len(rr_intervals))]
     squared_differences = [diff ** 2 for diff in differences]
     mean_squared_diff = sum(squared_differences) / len(squared_differences)
     rmssd = math.sqrt(mean_squared_diff)
 
-    return rmssd
+    # 2. Aplicar ln(RMSSD)
+    ln_rmssd = math.log(rmssd)
+
+    # 3. Expandir ln(RMSSD) a un rango de 0 a 100
+    hrv_score = (ln_rmssd / 6.5) * 100
+
+    return hrv_score
 
 async def rr_peaks_handler(data):
     flags = struct.unpack('<B', data[0:1])[0]
@@ -78,7 +85,7 @@ async def rr_peaks_handler(data):
             hrv_value = calculate_hrv(rr_peaks_data)
             if hrv_value is not None:
                 hrv_data.append({
-                    "rmssd": hrv_value
+                    "hrv": int(hrv_value)
                 })
 
 hrv_range_min = 0
@@ -163,14 +170,15 @@ async def get_rr_peaks():
 async def get_hrv():
     try:
         if hrv_data:
-            hrv_value = round(hrv_data[-1]["rmssd"], 2)
-            hrv_value = max(0, min(hrv_value, 100))
-            return {"hrv": int(hrv_value)}
+            hrv_value = round(hrv_data[-1]["hrv"], 2)
+            return {"hrv": hrv_value}
 
         raise HTTPException(status_code=404, detail="No HRV data available")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
+
+
 
 
 if __name__ == "__main__":
