@@ -6,6 +6,8 @@ import asyncio
 import struct
 import math
 from scipy import signal
+from scipy.signal import find_peaks
+from pyhrv import time_domain
 
 app = FastAPI()
 
@@ -78,10 +80,14 @@ def calculate_hrv(rr_intervals):
         return None
 
     # 1. Calcular RMSSD
-    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(1, len(rr_intervals))]
+    # differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(1, len(rr_intervals))]
+    last_two = rr_intervals[-2:]
+    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(len(last_two))]
     squared_differences = [diff ** 2 for diff in differences]
     mean_squared_diff = sum(squared_differences) / (len(squared_differences)-1)
     rmssd = math.sqrt(mean_squared_diff)
+
+    # rmssd = time_domain.rmssd(rr_intervals)[0]
 
     # 2. Aplicar ln(RMSSD)
     ln_rmssd = math.log(rmssd)
@@ -90,9 +96,28 @@ def calculate_hrv(rr_intervals):
     hrv_score = (ln_rmssd / 6.5) * 100
 
     # 4. Limitar el rango a 0-100
-    hrv_score = max(0, min(hrv_score, 100))
+    # hrv_score = max(0, min(hrv_score, 100))
 
     return hrv_score
+
+def lowpass_filter(signal, cutoff_freq, sampling_freq):
+    """
+    Aplica un filtro pasa bajos a la señal.
+
+    Args:
+        signal (numpy.ndarray): Señal de entrada.
+        cutoff_freq (float): Frecuencia de corte del filtro (en Hz).
+        sampling_freq (float): Frecuencia de muestreo de la señal (en Hz).
+
+    Returns:
+        numpy.ndarray: Señal filtrada.
+    """
+    normalized_cutoff_freq = 2 * cutoff_freq / sampling_freq
+    b, a = signal.butter(1, normalized_cutoff_freq, 'low', analog=False)
+    filtered_signal = signal.lfilter(b, a, signal)
+    return filtered_signal
+
+
 
 def apply_rr_peak_filter(rr_peaks, window_size=5):
     filtered_rr_peaks = []
@@ -102,6 +127,7 @@ def apply_rr_peak_filter(rr_peaks, window_size=5):
         rr_values = rr_peaks[start_index:end_index]
         filtered_rr_value = sum(rr_values) / len(rr_values)
         filtered_rr_peaks.append(filtered_rr_value)
+        
     return filtered_rr_peaks
 
 async def rr_peaks_handler(data):
@@ -110,12 +136,13 @@ async def rr_peaks_handler(data):
     if rr_interval_present:
         rr_interval1 = struct.unpack('<H', data[2:4])[0]
         rr_peaks_data.append(rr_interval1)
+            
         filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
         if len(filtered_rr_peaks) >= 2:
             hrv_value = calculate_hrv(filtered_rr_peaks)
             if hrv_value is not None:
                 hrv_data.append({"hrv": hrv_value})
-                
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
