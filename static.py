@@ -76,29 +76,24 @@ def apply_filter(data):
     return filtered_data.tolist()
 
 def calculate_hrv(rr_intervals):
-    if len(rr_intervals) < 2:
+    if len(rr_intervals) < 4:
         return None
 
-    # 1. Calcular RMSSD
-    # differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(1, len(rr_intervals))]
-    last_two = rr_intervals[-2:]
-    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(len(last_two))]
+    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(-3, 0)]
     squared_differences = [diff ** 2 for diff in differences]
-    mean_squared_diff = sum(squared_differences) / (len(squared_differences)-1)
+    mean_squared_diff = sum(squared_differences) / (len(squared_differences) - 1)
     rmssd = math.sqrt(mean_squared_diff)
 
-    # rmssd = time_domain.rmssd(rr_intervals)[0]
-
-    # 2. Aplicar ln(RMSSD)
     ln_rmssd = math.log(rmssd)
-
-    # 3. Expandir ln(RMSSD) a un rango de 0 a 100
     hrv_score = (ln_rmssd / 6.5) * 100
 
-    # 4. Limitar el rango a 0-100
-    # hrv_score = max(0, min(hrv_score, 100))
+    inverted_hrv_score = 100 - hrv_score
 
-    return hrv_score
+    return inverted_hrv_score
+
+
+
+
 
 def lowpass_filter(signal, cutoff_freq, sampling_freq):
     """
@@ -130,6 +125,7 @@ def apply_rr_peak_filter(rr_peaks, window_size=5):
         
     return filtered_rr_peaks
 
+
 async def rr_peaks_handler(data):
     flags = struct.unpack('<B', data[0:1])[0]
     rr_interval_present = (flags >> 4) & 0x01
@@ -137,7 +133,8 @@ async def rr_peaks_handler(data):
         rr_interval1 = struct.unpack('<H', data[2:4])[0]
         rr_peaks_data.append(rr_interval1)
             
-        filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
+        # filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
+        filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data[-4:])
         if len(filtered_rr_peaks) >= 2:
             hrv_value = calculate_hrv(filtered_rr_peaks)
             if hrv_value is not None:
