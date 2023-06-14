@@ -61,10 +61,13 @@ fs = 100  # Frecuencia de muestreo (Hz)
 fc = 10  # Frecuencia de corte del filtro (Hz)
 order = 4  # Orden del filtro
 
-# Diseñar el filtro Butterworth de paso bajo
+# Diseñar el filtro Butterworth de lowpass
 nyquist_freq = 0.5 * fs
 cutoff_freq = fc / nyquist_freq
 b, a = signal.butter(order, cutoff_freq, btype='low', analog=False, output='ba')
+
+# Norm HRV
+threshold = 75
 
 
 async def heart_rate_handler(data):
@@ -79,7 +82,9 @@ def calculate_hrv(rr_intervals):
     if len(rr_intervals) < 4:
         return None
 
-    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(-3, 0)]
+    recent_data = rr_intervals[-4:]
+    differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(len(recent_data))]
+    # differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(-3, 0)]
     squared_differences = [diff ** 2 for diff in differences]
     mean_squared_diff = sum(squared_differences) / (len(squared_differences) - 1)
     rmssd = math.sqrt(mean_squared_diff)
@@ -87,7 +92,10 @@ def calculate_hrv(rr_intervals):
     ln_rmssd = math.log(rmssd)
     hrv_score = (ln_rmssd / 6.5) * 100
 
-    inverted_hrv_score = 100 - hrv_score
+    if hrv_score > threshold:
+        inverted_hrv_score = 100 - hrv_score
+    else:
+        inverted_hrv_score = hrv_score
 
     return inverted_hrv_score
 
@@ -97,7 +105,7 @@ def calculate_hrv(rr_intervals):
 
 def lowpass_filter(signal, cutoff_freq, sampling_freq):
     """
-    Aplica un filtro pasa bajos a la señal.
+    Aplica un filtro lowpass a la señal.
 
     Args:
         signal (numpy.ndarray): Señal de entrada.
@@ -133,8 +141,8 @@ async def rr_peaks_handler(data):
         rr_interval1 = struct.unpack('<H', data[2:4])[0]
         rr_peaks_data.append(rr_interval1)
             
-        # filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
-        filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data[-4:])
+        filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data)
+        # filtered_rr_peaks = apply_rr_peak_filter(rr_peaks_data[-4:])
         if len(filtered_rr_peaks) >= 2:
             hrv_value = calculate_hrv(filtered_rr_peaks)
             if hrv_value is not None:
