@@ -8,6 +8,7 @@ import math
 from scipy import signal
 from scipy.signal import find_peaks
 from pyhrv import time_domain
+import uvicorn
 
 app = FastAPI()
 
@@ -67,7 +68,7 @@ cutoff_freq = fc / nyquist_freq
 b, a = signal.butter(order, cutoff_freq, btype='low', analog=False, output='ba')
 
 # Norm HRV
-threshold = 75
+threshold = 70
 
 
 async def heart_rate_handler(data):
@@ -78,13 +79,16 @@ def apply_filter(data):
     filtered_data = signal.lfilter(b, a, data)
     return filtered_data.tolist()
 
+hrv_scoreT = 0
+
 def calculate_hrv(rr_intervals):
-    if len(rr_intervals) < 4:
+    global hrv_scoreT
+
+    if len(rr_intervals) < 2:
         return None
 
     recent_data = rr_intervals[-4:]
     differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(len(recent_data))]
-    # differences = [rr_intervals[i] - rr_intervals[i-1] for i in range(-3, 0)]
     squared_differences = [diff ** 2 for diff in differences]
     mean_squared_diff = sum(squared_differences) / (len(squared_differences) - 1)
     rmssd = math.sqrt(mean_squared_diff)
@@ -92,10 +96,24 @@ def calculate_hrv(rr_intervals):
     ln_rmssd = math.log(rmssd)
     hrv_score = (ln_rmssd / 6.5) * 100
 
-    if hrv_score > threshold:
-        inverted_hrv_score = 100 - hrv_score
-    else:
-        inverted_hrv_score = hrv_score
+    # listt.append(hrv_score)
+
+    # Total Recording HRV
+    differencesT = [rr_intervals[i] - rr_intervals[i-1] for i in range(len(rr_intervals))]
+    squared_differencesT = [diffT ** 2 for diffT in differencesT]
+    mean_squared_diffT = sum(squared_differencesT) / (len(squared_differencesT) - 1)
+    rmssdT = math.sqrt(mean_squared_diffT)
+
+    ln_rmssdT = math.log(rmssdT)
+    hrv_scoreT = (ln_rmssdT / 6.5) * 100
+
+    # if hrv_score + 15 > listt[-1:][0] or hrv_score -15 <= listt[-1:][0]:
+    #     inverted_hrv_score = 100 - hrv_score
+    #     print("ENTRE")
+    # else:
+    #     inverted_hrv_score = hrv_score
+
+    inverted_hrv_score = 100 - hrv_score
 
     return inverted_hrv_score
 
@@ -151,6 +169,7 @@ async def rr_peaks_handler(data):
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    print("Bye bye, your total HRV: ", hrv_scoreT)
     await polar_device.disconnect()
 
 @app.exception_handler(HTTPException)
@@ -239,4 +258,4 @@ async def get_hrv():
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

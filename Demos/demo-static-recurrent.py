@@ -1,7 +1,7 @@
 import requests
 import time
 
-base_url = "http://localhost:8000"
+base_url = "http://localhost:8001"
 
 def connect_to_polar():
     response = requests.get(f"{base_url}/connect")
@@ -18,7 +18,7 @@ def start_notifications():
         print("Error al iniciar las notificaciones")
 
 def get_heart_rate():
-    response = requests.get("http://localhost:8000/heart_rate")
+    response = requests.get("http://localhost:8001/heart_rate")
     if response.status_code == 200:
         data = response.json()
         heart_rate = data.get("heart_rate")
@@ -30,7 +30,7 @@ def get_heart_rate():
         print(f"Error: {response.status_code} - {response.text}")
 
 def get_rr_peaks():
-    response = requests.get("http://localhost:8000/rr_peaks")
+    response = requests.get("http://localhost:8001/rr_peaks")
     if response.status_code == 200:
         data = response.json()
         rr_peaks = data.get("rr_peaks")
@@ -42,7 +42,7 @@ def get_rr_peaks():
         print(f"Error: {response.status_code} - {response.text}")
 
 def get_hrv():
-    response = requests.get("http://localhost:8000/hrv")
+    response = requests.get("http://localhost:8001/hrv")
     if response.status_code == 200:
         data = response.json()
         # print("HRV data:", data)
