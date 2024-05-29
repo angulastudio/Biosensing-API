@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
-from bleak import BleakClient
+from bleak import  BleakScanner, BleakClient
 import asyncio
 import numpy as np
 import uvicorn
@@ -88,6 +88,16 @@ def hr_notification_handler(sender, data):
             hrv_data.append({"hrv": scaled_hrv})
             print(f"Cleaned RMSSD: {rmssd:.2f} ms, Scaled HRV: {scaled_hrv:.2f}")
 
+@app.get("/scan")
+async def scan_devices():
+    devices = await BleakScanner.discover()
+    polar_devices = [{"name": device.name, "address": device.address} for device in devices if device.name and "Polar" in device.name]
+
+    if not polar_devices:
+        raise HTTPException(status_code=404, detail="No se encontraron dispositivos Polar.")
+
+    return polar_devices
+
 @app.post("/set_address")
 async def set_address(device_address: DeviceAddress):
     global ADDRESS
@@ -119,9 +129,14 @@ async def start_notifications():
 @app.get("/stop_notifications")
 async def stop_notifications():
     try:
+        if hrv_data:
+            all_hrv = [data["hrv"] for data in hrv_data]
+            average_hrv = sum(all_hrv) / len(all_hrv)
+            print(f"Final average HRV: {average_hrv:.2f}")
+
         if bleak_client and bleak_client.is_connected:
             await bleak_client.stop_notify(UUID_HEART_RATE)
-            return {"message": "Notifications stopped"}
+            return {"message": "Final average HRV: {average_hrv:.2f} \n Notifications stopped"}
         raise HTTPException(status_code=500, detail="Client is not connected")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
