@@ -144,11 +144,22 @@ async def get_rr_peaks():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.get("/hrv")
+# async def get_hrv():
+#     try:
+#         if hrv_data:
+#             return {"hrv": hrv_data[-1]}
+#         raise HTTPException(status_code=404, detail="No HRV data available")
+#     except Exception as e:
+#         return {"error": str(e)}
+    
 @app.get("/hrv")
 async def get_hrv():
     try:
         if hrv_data:
-            return {"hrv": hrv_data[-1]}
+            last_10_hrv = [data["hrv"] for data in hrv_data[-10:]]
+            average_hrv = sum(last_10_hrv) / len(last_10_hrv)
+            return {"hrv": round(average_hrv, 2)}
         raise HTTPException(status_code=404, detail="No HRV data available")
     except Exception as e:
         return {"error": str(e)}
