@@ -153,11 +153,16 @@ async def get_hrv():
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     print("Shutting down")
     if bleak_client and bleak_client.is_connected:
         await bleak_client.disconnect()
+    if hrv_data:
+        all_hrv = [data["hrv"] for data in hrv_data]
+        average_hrv = sum(all_hrv) / len(all_hrv)
+        print(f"Final average HRV: {average_hrv:.2f}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
