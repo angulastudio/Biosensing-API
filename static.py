@@ -9,6 +9,7 @@ from scipy import signal
 from scipy.signal import find_peaks
 from pyhrv import time_domain
 import uvicorn
+import numpy as np
 
 app = FastAPI()
 
@@ -165,6 +166,61 @@ async def rr_peaks_handler(data):
             hrv_value = calculate_hrv(filtered_rr_peaks)
             if hrv_value is not None:
                 hrv_data.append({"hrv": hrv_value})
+
+
+def parse_heart_rate_data(data):
+    """Parsea los datos de frecuencia cardíaca recibidos desde el dispositivo."""
+    flag = data[0]
+    hr_format = flag & 0x01
+    rr_present = (flag & 0x10) >> 4
+
+    hr_value = None
+    rr_values = []
+    index = 1
+
+    if hr_format == 0:
+        hr_value = data[index]
+        index += 1
+    else:
+        hr_value = data[index] + (data[index + 1] << 8)
+        index += 2
+
+    if rr_present == 1:
+        while index < len(data):
+            rr_interval = data[index] + (data[index + 1] << 8)
+            rr_values.append(rr_interval / 1024.0 * 1000)  # Convert to ms
+            index += 2
+
+    return hr_value, rr_values
+
+def clean_rr_intervals(rr_intervals):
+    """Limpia los RR intervals para eliminar artefactos."""
+    if len(rr_intervals) < 3:
+        return rr_intervals  # No hay suficientes datos para limpiar
+    rr_intervals = np.array(rr_intervals)
+    q25, q75 = np.percentile(rr_intervals, [25, 75])
+    iqr = q75 - q25
+    lower_bound = q25 - (1.5 * iqr)
+    upper_bound = q75 + (1.5 * iqr)
+    return rr_intervals[(rr_intervals > lower_bound) & (rr_intervals < upper_bound)].tolist()
+
+def calculate_rmssd(rr_intervals):
+    """Calcula el RMSSD de una serie de intervalos RR."""
+    if len(rr_intervals) < 2:
+        return None
+    diffs = np.diff(rr_intervals)
+    squared_diffs = diffs ** 2
+    mean_squared_diffs = np.mean(squared_diffs)
+    rmssd_value = np.sqrt(mean_squared_diffs)
+    return rmssd_value
+
+def scale_hrv_to_100(ln_rmssd):
+    """Escala el ln(RMSSD) a un rango de 0 a 100."""
+    # Estos rangos son aproximados y deberían ser ajustados basados en datos empíricos
+    min_ln_rmssd = 0
+    max_ln_rmssd = 6.5
+    scaled_hrv = (ln_rmssd - min_ln_rmssd) / (max_ln_rmssd - min_ln_rmssd) * 100
+    return min(max(scaled_hrv, 0), 100)
 
 
 @app.on_event("shutdown")
