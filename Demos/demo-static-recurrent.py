@@ -62,7 +62,7 @@ def get_hrv():
         print(f"Error: {response.status_code} - {response.text}")
 
 # Set the device address
-device_address = "D12EA708-D2E2-A337-3E1B-C75976067C2F"
+device_address = "ADDRESS"
 set_address(device_address)
 
 # Connect to Polar and start notifications
