@@ -23,10 +23,8 @@ def start_notifications():
     else:
         print(f"Error: {response.status_code} - {response.text}")
 
-# Set the device address
+
 device_address = "ADDRESS"
 set_address(device_address)
-
-# Connect to Polar and start notifications
 connect_to_polar()
 start_notifications()

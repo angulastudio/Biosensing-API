@@ -10,7 +10,6 @@ app = FastAPI()
 class DeviceAddress(BaseModel):
     address: str
 
-# Variable global para almacenar la dirección del dispositivo
 ADDRESS = None
 UUID_HEART_RATE = "00002a37-0000-1000-8000-00805f9b34fb"
 
