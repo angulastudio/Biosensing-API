@@ -4,6 +4,26 @@
 [![forthebadge](https://forthebadge.com/images/badges/powered-by-coffee.svg)](https://forthebadge.com)
 [![forthebadge](https://forthebadge.com/images/badges/makes-people-smile.svg)](https://forthebadge.com)
 
+## Table of Contents
+
+1. [Description](#description)
+2. [Installation](#installation)
+3. [Base URL](#base-url)
+4. [Endpoints](#endpoints)
+    - [1. Set Device Address](#1-set-device-address)
+    - [2. Connect to Polar Device](#2-connect-to-polar-device)
+    - [3. Start Notifications](#3-start-notifications)
+    - [4. Stop Notifications](#4-stop-notifications)
+    - [5. Get Heart Rate](#5-get-heart-rate)
+    - [6. Get RR Peaks](#6-get-rr-peaks)
+    - [7. Get HRV](#7-get-hrv)
+5. [Example Scripts](#example-scripts)
+    - [First Script: Connect and Start Notifications](#first-script-connect-and-start-notifications)
+    - [Second Script: Continuously Monitor Data](#second-script-continuously-monitor-data)
+6. [Postman Collection](#postman-collection)
+
+
+
 ## Description
 The Biosensing API is an API that streams real-time data from Polar heart rate sensors. It transmits real-time data such as heartbeats, RR peaks, and HRV.
 
@@ -32,6 +52,9 @@ The Biosensing API is an API that streams real-time data from Polar heart rate s
 ```bash
    uvicorn app:app --reload
 ```
+
+## Base URL
+http://localhost:8000
 
 ## Endpoints
 
@@ -171,6 +194,37 @@ curl -X GET "http://localhost:8000/hrv"
 ```
 
 
+## Postman Collection
+
+We have provided a Postman collection to help you test and interact with the PolarAPI.
+
+### Importing the Collection
+
+1. Download the [PolarAPI Postman Collection](./PolarAPI.postman_collection.json).
+2. Open Postman and go to the "Collections" tab.
+3. Click the "Import" button and select the downloaded JSON file.
+
+### Setting Up Environment Variables
+
+1. In Postman, go to the "Environments" tab.
+2. Click the "Import" button and select the [PolarAPI Environment](./Biosense.postman_environment.json) file.
+3. Ensure the `base_url` and `device_address` variables are correctly set in the environment.
+
+### Using the Collection
+
+1. Select the `Biosense` environment in Postman.
+2. Use the requests in the `Biosense` collection to interact with the API.
+
+#### Requests Available on the Collection
+
+- **Scan**: Sets the address of the Polar device.
+- **Set Address**: Sets the address of the Polar device.
+- **Connect**: Connects to the Polar device.
+- **Start Notifications**: Starts heart rate and RR notifications.
+- **Stop Notifications**: Stops notifications and returns the final average HRV.
+- **Heart Rate**: Returns the latest heart rate reading.
+- **RR Peaks**: Returns the latest RR peaks reading.
+- **HRV**: Returns the average HRV of the last 10 readings.
 
 
 ## License
