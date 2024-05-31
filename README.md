@@ -200,14 +200,14 @@ We have provided a Postman collection to help you test and interact with the Pol
 
 ### Importing the Collection
 
-1. Download the [PolarAPI Postman Collection](./PolarAPI.postman_collection.json).
+1. Download the [Biosense Postman Collection](./Biosense.postman_collection.json).
 2. Open Postman and go to the "Collections" tab.
 3. Click the "Import" button and select the downloaded JSON file.
 
 ### Setting Up Environment Variables
 
 1. In Postman, go to the "Environments" tab.
-2. Click the "Import" button and select the [PolarAPI Environment](./Biosense.postman_environment.json) file.
+2. Click the "Import" button and select the [Biosense Environment](./Biosense.postman_environment.json) file.
 3. Ensure the `base_url` and `device_address` variables are correctly set in the environment.
 
 ### Using the Collection
