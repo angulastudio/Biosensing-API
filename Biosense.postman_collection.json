@@ -1,0 +1,160 @@
+{
+	"info": {
+		"_postman_id": "88fc0dd7-f2d6-4d62-9afb-5e6017bd2bf6",
+		"name": "Biosense",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "4393491"
+	},
+	"item": [
+		{
+			"name": "Scan",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/scan",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"scan"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Set Address",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"address\": \"{{device_address}}\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/set_address",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"set_address"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Connect",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://127.0.0.1:8000/connect",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"connect"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Start Notifications",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/start_notifications",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"start_notifications"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Heart Rate",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/heart_rate",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"heart_rate"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "RR Peaks",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/rr_peaks",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"rr_peaks"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "HRV",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/hrv",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"hrv"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Stop Notifications",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/stop_notifications",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"stop_notifications"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
