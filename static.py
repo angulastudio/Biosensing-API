@@ -90,7 +90,8 @@ def hr_notification_handler(sender, data):
 @app.get("/scan")
 async def scan_devices():
     devices = await BleakScanner.discover()
-    polar_devices = [{"name": device.name, "address": device.address} for device in devices if device.name and "Polar" in device.name]
+    # polar_devices = [{"name": device.name, "address": device.address} for device in devices if device.name and "Polar" in device.name]
+    polar_devices = [{"name": device.name, "address": device.address} for device in devices if device.name]
 
     if not polar_devices:
         raise HTTPException(status_code=404, detail="No se encontraron dispositivos Polar.")
@@ -112,6 +113,16 @@ async def connect_to_polar():
         bleak_client = BleakClient(ADDRESS)
         await bleak_client.connect()
         return {"message": "Connected to Polar device"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/disconnect")
+async def disconnect_polar():
+    try:
+        if bleak_client and bleak_client.is_connected:
+            await bleak_client.disconnect()
+            return {"message": "Disconnected from Polar device"}
+        raise HTTPException(status_code=500, detail="Client is not connected")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
