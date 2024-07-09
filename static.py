@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bleak import  BleakScanner, BleakClient
 import asyncio
@@ -6,6 +7,24 @@ import numpy as np
 import uvicorn
 
 app = FastAPI()
+
+# Configurar CORS
+origins = [
+    "http://localhost:3000",
+    "https://angulastudio.github.io",
+    "https://angulastudio.github.io/BioSense-SPA/",
+    "https://00b9-93-42-193-170.ngrok-free.app"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    # allow_origins=origins,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class DeviceAddress(BaseModel):
     address: str
@@ -98,6 +117,7 @@ async def scan_devices():
 
     return polar_devices
 
+
 @app.post("/set_address")
 async def set_address(device_address: DeviceAddress):
     global ADDRESS
@@ -120,6 +140,7 @@ async def connect_to_polar():
 async def disconnect_polar():
     try:
         if bleak_client and bleak_client.is_connected:
+            # await stop_notifications()
             await bleak_client.disconnect()
             return {"message": "Disconnected from Polar device"}
         raise HTTPException(status_code=500, detail="Client is not connected")
